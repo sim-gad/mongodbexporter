@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -35,19 +36,17 @@ func newMongoDbExporter(ctx context.Context, config *Config) (*mongoDbExporter, 
 
 }
 
-type Test struct {
-	Data string
-}
-
 func (mdbe *mongoDbExporter) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
 	data, err := marshaller.MarshalTraces(td)
 	if err != nil {
 		return err
 	}
-	t := Test{
-		Data: string(data),
+	var bsonDoc interface{}
+	err = bson.UnmarshalExtJSON(data, true, &bsonDoc)
+	if err != nil {
+		return err
 	}
-	_, err = mdbe.collectionTraces.InsertOne(ctx, t, options.InsertOne().SetBypassDocumentValidation(true))
+	_, err = mdbe.collectionTraces.InsertOne(ctx, bsonDoc, options.InsertOne().SetBypassDocumentValidation(true))
 	if err != nil {
 		return err
 	}
