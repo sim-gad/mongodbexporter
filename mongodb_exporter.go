@@ -12,7 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var marshaller = ptrace.JSONMarshaler{}
+var traceMarshaller = ptrace.JSONMarshaler{}
+var logsMarshaller = plog.JSONMarshaler{}
 
 // mongoDbExporter is the implementation of mongoDb exporter that writes telemetry data to a mongoDb collection
 type mongoDbExporter struct {
@@ -37,12 +38,7 @@ func newMongoDbExporter(ctx context.Context, config *Config) (*mongoDbExporter, 
 }
 
 func (mdbe *mongoDbExporter) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
-	data, err := marshaller.MarshalTraces(td)
-	if err != nil {
-		return err
-	}
-	var bsonDoc interface{}
-	err = bson.UnmarshalExtJSON(data, true, &bsonDoc)
+	bsonDoc, err := ptraceToBsonDoc(&td)
 	if err != nil {
 		return err
 	}
@@ -54,11 +50,41 @@ func (mdbe *mongoDbExporter) ConsumeTraces(ctx context.Context, td ptrace.Traces
 }
 
 func (mdbe *mongoDbExporter) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
-	_, err := mdbe.collectionLogs.InsertOne(ctx, ld)
+	bsonDoc, err := plogToBsonDoc(&ld)
+	if err != nil {
+		return err
+	}
+	_, err = mdbe.collectionLogs.InsertOne(ctx, bsonDoc, options.InsertOne().SetBypassDocumentValidation(true))
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func ptraceToBsonDoc(trace *ptrace.Traces) (interface{}, error) {
+	data, err := traceMarshaller.MarshalTraces(*trace)
+	if err != nil {
+		return nil, err
+	}
+	var bsonDoc interface{}
+	err = bson.UnmarshalExtJSON(data, true, &bsonDoc)
+	if err != nil {
+		return nil, err
+	}
+	return bsonDoc, nil
+}
+
+func plogToBsonDoc(ld *plog.Logs) (interface{}, error) {
+	data, err := logsMarshaller.MarshalLogs(*ld)
+	if err != nil {
+		return nil, err
+	}
+	var bsonDoc interface{}
+	err = bson.UnmarshalExtJSON(data, true, &bsonDoc)
+	if err != nil {
+		return nil, err
+	}
+	return bsonDoc, nil
 }
 
 func (mdbe *mongoDbExporter) Start(context.Context, component.Host) error {
