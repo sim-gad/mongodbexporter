@@ -11,6 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var marshaller = ptrace.JSONMarshaler{}
+
 // mongoDbExporter is the implementation of mongoDb exporter that writes telemetry data to a mongoDb collection
 type mongoDbExporter struct {
 	client           *mongo.Client
@@ -33,8 +35,19 @@ func newMongoDbExporter(ctx context.Context, config *Config) (*mongoDbExporter, 
 
 }
 
+type Test struct {
+	Data string
+}
+
 func (mdbe *mongoDbExporter) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
-	_, err := mdbe.collectionTraces.InsertOne(ctx, newTraceDoc(td), options.InsertOne().SetBypassDocumentValidation(true))
+	data, err := marshaller.MarshalTraces(td)
+	if err != nil {
+		return err
+	}
+	t := Test{
+		Data: string(data),
+	}
+	_, err = mdbe.collectionTraces.InsertOne(ctx, t, options.InsertOne().SetBypassDocumentValidation(true))
 	if err != nil {
 		return err
 	}
