@@ -1,0 +1,6 @@
+exporters:
+  mongo_db:
+    conn_uri: mongodb://foo:bar@localhost:27017
+    logs_collection: Logs_coll
+    traces_collection: Requests_coll
+    db: OtelData
